@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070e">
+<meta name="description" content="拖动 X / Y / Z 三轴平移切面，实时观察平面切圆锥得到的圆、椭圆、抛物线、双曲线与退化情形。">
+<title>圆锥的截面 · 圆锥曲线互动实验室</title>
+<style>
+  :root{
+    --bg:#05070e;
+    --ink:#eaf2ff;
+    --muted:#8ea6c8;
+    --faint:rgba(142,166,200,.60);
+    --line:rgba(122,172,255,.14);
+    --accent:#5eead4;
+    --accent-dim:rgba(94,234,212,.42);
+    --x:#ff5f7e;
+    --y:#7bf1a8;
+    --z:#5b8cff;
+    --amber:#f5b942;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;overflow:hidden;
+    background:
+      radial-gradient(1200px 820px at 16% 4%, #10284a 0%, rgba(16,40,74,0) 58%),
+      radial-gradient(1000px 780px at 88% 96%, #1d0f31 0%, rgba(29,15,49,0) 62%),
+      radial-gradient(700px 520px at 50% 50%, #0a1426 0%, rgba(10,20,38,0) 70%),
+      linear-gradient(158deg,#04060c 0%,#070c19 55%,#04060c 100%);
+    color:var(--ink);
+    font-family:"Inter","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    user-select:none;-webkit-user-select:none;
+    overflow:hidden;
+  }
+  #stage{
+    position:fixed;inset:0;width:100%;height:100%;display:block;
+    touch-action:none;cursor:grab;
+  }
+  #stage.grabbing{cursor:grabbing}
+
+  /* ---------- 标题 ---------- */
+  .hero{
+    position:fixed;left:34px;top:28px;z-index:5;pointer-events:none;max-width:560px;
+    animation:rise .9s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .hero::before{
+    content:"";position:absolute;inset:-46px -70px -30px -60px;z-index:-1;pointer-events:none;
+    background:radial-gradient(58% 64% at 26% 44%, rgba(4,8,15,.82), rgba(4,8,15,.42) 62%, rgba(4,8,15,0) 100%);
+  }
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.30em;color:#6d89b4;text-transform:uppercase}
+  .hero h1{
+    margin:11px 0 9px;text-shadow:0 3px 24px rgba(3,7,16,.92);font-size:clamp(20px,2.15vw,31px);font-weight:800;line-height:1.24;letter-spacing:.005em;
+  }
+  .hero h1 span{
+    background:linear-gradient(92deg,#7dd3fc 0%,#a78bfa 52%,#fb7185 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero .sub{font-size:12.5px;line-height:1.85;color:var(--muted);max-width:430px}
+  .hero .sub b{font-weight:700}
+  .hero .sub .cx{color:var(--x)} .hero .sub .cy{color:var(--y)} .hero .sub .cz{color:var(--z)}
+
+  /* ---------- 控制面板 ---------- */
+  .panel{
+    position:fixed;right:26px;top:26px;width:334px;z-index:6;
+    padding:18px 18px 16px;border-radius:22px;
+    background:linear-gradient(180deg,rgba(14,23,42,.88),rgba(7,12,24,.94));
+    border:1px solid var(--line);
+    box-shadow:0 30px 70px -26px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.055);
+    backdrop-filter:blur(20px) saturate(1.25);
+    -webkit-backdrop-filter:blur(20px) saturate(1.25);
+    animation:rise .9s .08s cubic-bezier(.2,.8,.2,1) both;
+    max-height:calc(100vh - 52px);overflow:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;
+  }
+  .panel::-webkit-scrollbar{width:6px}
+  .panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px}
+
+  .result{display:flex;align-items:center;gap:14px}
+  .badge{
+    flex:0 0 auto;width:54px;height:54px;border-radius:16px;display:grid;place-items:center;
+    color:var(--accent);
+    background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.10),rgba(255,255,255,0) 64%),rgba(255,255,255,.028);
+    border:1px solid var(--accent-dim);
+    box-shadow:0 0 26px -7px var(--accent), inset 0 0 22px -12px var(--accent);
+    transition:color .35s,border-color .35s,box-shadow .35s;
+  }
+  .badge svg{display:block}
+  .type{font-size:25px;font-weight:800;line-height:1.12;letter-spacing:.015em;color:#fff}
+  .en{font-size:10.5px;letter-spacing:.20em;text-transform:uppercase;color:var(--faint);margin-top:4px}
+
+  .why{
+    margin:15px 0 16px;font-size:12.5px;line-height:1.8;color:#b7c9e4;
+    min-height:64px;
+  }
+  .why b{color:var(--accent);font-weight:700}
+
+  /* 角度标尺 */
+  .meter{margin-bottom:17px}
+  .meter-head{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:var(--muted);margin-bottom:8px}
+  .meter-head b{color:#e3eeff;font-weight:700;font-variant-numeric:tabular-nums;font-size:12.5px}
+  .track{position:relative;height:8px;border-radius:99px;background:rgba(255,255,255,.065);margin:0 6px}
+  .track .fill{
+    position:absolute;left:0;top:0;bottom:0;border-radius:99px;
+    background:linear-gradient(90deg,rgba(255,255,255,.06),var(--accent-dim));
+    transition:width .12s linear,background .35s;
+  }
+  .track .mark{
+    position:absolute;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;
+    background:#fff;box-shadow:0 0 14px var(--accent),0 0 0 3px rgba(0,0,0,.35);
+    transition:left .12s linear,box-shadow .35s;
+  }
+  .track .th{
+    position:absolute;top:-7px;bottom:-7px;width:1px;
+    background:repeating-linear-gradient(180deg,rgba(142,166,200,.9) 0 3px,transparent 3px 6px);
+  }
+  .meter-foot{display:flex;justify-content:space-between;font-size:10.5px;color:#5f7699;margin-top:7px}
+
+  .control{margin-bottom:12px}
+  .control label{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:var(--muted);margin-bottom:6px}
+  .control label output{color:#e3eeff;font-weight:700;font-variant-numeric:tabular-nums;font-size:12px}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;cursor:pointer;display:block;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:99px;background:rgba(255,255,255,.10)}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:15px;height:15px;margin-top:-5.5px;border-radius:50%;
+    background:#0b1424;border:2px solid var(--accent);
+    box-shadow:0 0 0 3px rgba(4,8,16,.55),0 0 14px -1px var(--accent);
+    transition:border-color .3s,box-shadow .3s;
+  }
+  input[type=range]::-moz-range-track{height:4px;border-radius:99px;background:rgba(255,255,255,.10)}
+  input[type=range]::-moz-range-thumb{
+    width:12px;height:12px;border-radius:50%;background:#0b1424;border:2px solid var(--accent);
+    box-shadow:0 0 12px var(--accent);
+  }
+  input[type=range]:focus-visible{outline:2px solid var(--accent-dim);outline-offset:4px;border-radius:99px}
+
+  .presets{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:6px}
+  .touch-tip{display:none;margin:11px 0 1px;font-size:11px;line-height:1.6;color:#6f86a8;text-align:center}
+  .touch-tip b{color:#a9c3e6;font-weight:700}
+  .preset{
+    appearance:none;font-family:inherit;font-size:11.5px;line-height:1;padding:9px 2px;
+    color:#c2d4ee;background:rgba(255,255,255,.035);
+    border:1px solid rgba(255,255,255,.085);border-radius:11px;cursor:pointer;
+    transition:background .18s,border-color .18s,color .18s,transform .1s;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .preset:hover{background:rgba(255,255,255,.085);color:#fff;border-color:rgba(255,255,255,.20)}
+  .preset:active{transform:translateY(1px)}
+  .preset[data-active="1"]{border-color:var(--accent-dim);color:var(--accent);background:rgba(255,255,255,.055)}
+
+  /* ---------- 左侧截面视图 ---------- */
+  .section-card{
+    position:fixed;left:34px;top:188px;width:252px;z-index:5;
+    padding:12px 12px 9px;border-radius:18px;
+    background:linear-gradient(180deg,rgba(14,23,42,.84),rgba(7,12,24,.93));
+    border:1px solid var(--line);
+    box-shadow:0 26px 60px -28px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.05);
+    backdrop-filter:blur(18px) saturate(1.2);
+    -webkit-backdrop-filter:blur(18px) saturate(1.2);
+    animation:rise .9s .12s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .sc-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px}
+  .sc-title{font-size:12px;font-weight:700;color:#dce9ff;letter-spacing:.02em}
+  .sc-sub{font-size:10px;color:#6f86a8}
+  #sectionView{
+    display:block;width:100%;aspect-ratio:1/1;border-radius:12px;
+    background:rgba(255,255,255,.018);border:1px solid rgba(255,255,255,.05);
+  }
+  .sc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:10.5px;line-height:1}
+  .sc-foot #scType{font-weight:700;color:var(--accent);transition:color .35s}
+  .sc-foot #scGrid{color:#61789b}
+
+  /* ---------- 位置滑杆 ---------- */
+  .axis-pos{margin:4px 0 12px;padding-top:3px;border-top:1px dashed rgba(255,255,255,.07)}
+  .axis-pos .cap{display:flex;justify-content:space-between;font-size:10px;color:#5f7699;margin:7px 0 1px;letter-spacing:.02em}
+  .axis-pos .row{display:flex;align-items:center;gap:9px;height:29px}
+  .axis-pos .row .k{font-size:11px;font-weight:800;width:9px;text-align:center;font-style:normal}
+  .axis-pos .row .k.x{color:var(--x)}
+  .axis-pos .row .k.y{color:var(--y)}
+  .axis-pos .row .k.z{color:var(--z)}
+  .axis-pos .row input[type=range]{flex:1;height:20px}
+  .axis-pos .row output{width:40px;text-align:right;font-size:11px;color:#dbe8ff;font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* ---------- 底部提示 ---------- */
+  .hintbar{
+    position:fixed;left:34px;bottom:26px;z-index:5;pointer-events:none;
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;
+    font-size:11.5px;color:#7d93b6;
+    animation:rise .9s .16s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .hintbar .item{display:inline-flex;align-items:center;gap:7px}
+  .hintbar i{
+    font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.04em;color:#cfe0f7;
+    padding:4px 8px;border-radius:7px;background:rgba(255,255,255,.045);
+    border:1px solid rgba(255,255,255,.09);white-space:nowrap;
+  }
+  .hintbar .tip{color:#6f86a8}
+  .hintbar .tip em{font-style:normal;color:#9db4d4}
+
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  @media (max-width:1180px){
+    .badge{width:48px;height:48px}
+    .type{font-size:22px}
+    .section-card{left:24px;top:166px;width:212px;padding:10px 10px 8px}
+    .sc-sub{display:none}
+    .sc-title{font-size:11px}
+  }
+  @media (max-width:900px){
+    .hero{left:16px;right:16px;top:16px;max-width:none}
+    .hero h1{font-size:18px;margin:7px 0 0;line-height:1.3}
+    .hero .sub{display:none}
+    .eyebrow{font-size:10px;letter-spacing:.24em}
+    .panel{
+      left:10px;right:10px;top:auto;bottom:10px;width:auto;
+      padding:14px 14px 12px;border-radius:18px;max-height:58vh;
+    }
+    .type{font-size:21px}
+    .why{font-size:12px;min-height:0;margin:10px 0 11px}
+    .control{margin-bottom:9px}
+    .meter{margin-bottom:13px}
+    .hintbar{display:none}
+    .touch-tip{display:block}
+    .presets{grid-template-columns:repeat(4,1fr)}
+    .preset{font-size:11px;padding:8px 2px}
+    .section-card{left:10px;top:64px;width:112px;padding:8px 8px 6px;border-radius:14px}
+    .sc-head{margin-bottom:5px}
+    .sc-title{font-size:10px}
+    .sc-sub{display:none}
+    .sc-foot{display:none}
+    #sectionView{border-radius:9px}
+    .axis-pos .row{height:26px}
+    .axis-pos{margin-bottom:8px}
+    .meter{display:none}
+    .control.d{display:none}
+    .why{margin:9px 0 10px}
+  }
+  @media (max-height:620px) and (min-width:901px){
+    .panel{max-height:calc(100vh - 24px);top:12px}
+    .why{min-height:0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .hero,.panel,.hintbar{animation:none}
+    *{transition-duration:.01ms !important}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stage" aria-label="可交互的三维圆锥截面演示画布"></canvas>
+
+<header class="hero">
+  <div class="eyebrow">Conic Sections · 数学可视化</div>
+  <h1>用一张平面切开圆锥，<span>截线会是什么？</span></h1>
+  <p class="sub">
+    拖动 <b class="cx">X</b> / <b class="cy">Y</b> / <b class="cz">Z</b> 轴箭头平移切面 · 拖动空白处旋转视角 · 滚轮缩放
+  </p>
+</header>
+
+<aside class="section-card" id="sectionCard" aria-label="截面视图：切面内曲线的真实形状">
+  <div class="sc-head">
+    <span class="sc-title">截面视图</span>
+    <span class="sc-sub">切面内真实形状</span>
+  </div>
+  <canvas id="sectionView" width="230" height="230" aria-label="切面内的截线形状"></canvas>
+  <div class="sc-foot"><span id="scType">圆</span><span id="scGrid">1 格 = 1 单位</span></div>
+</aside>
+
+<aside class="panel" aria-label="控制面板">
+  <div class="result">
+    <div class="badge" id="badge" aria-hidden="true"></div>
+    <div>
+      <div class="type" id="typeName">圆</div>
+      <div class="en" id="typeEn">Circle</div>
+    </div>
+  </div>
+
+  <p class="why" id="why"></p>
+
+  <div class="meter">
+    <div class="meter-head"><span>切面与圆锥轴线的夹角 ψ</span><b id="psiVal">90.0°</b></div>
+    <div class="track">
+      <span class="fill" id="meterFill"></span>
+      <span class="th" id="meterTh"></span>
+      <span class="mark" id="meterMark"></span>
+    </div>
+    <div class="meter-foot"><span>ψ 越小，切面越「陡」</span><span>半顶角 α ≈ 32.0°</span></div>
+  </div>
+
+  <div class="control">
+    <label for="tilt"><span>切面倾角 θ（相对水平面）</span><output id="tiltVal">0.0°</output></label>
+    <input id="tilt" type="range" min="0" max="89" step="0.5" value="0" aria-label="切面倾角">
+  </div>
+
+  <div class="control d">
+    <label for="offset"><span>切面到顶点的距离 d</span><output id="offsetVal">1.80</output></label>
+    <input id="offset" type="range" min="-2.6" max="2.6" step="0.01" value="1.8" aria-label="切面到顶点的距离">
+  </div>
+
+  <div class="axis-pos">
+    <div class="cap"><span>切面位置（拖滑杆或拖箭头）</span><span>X / Y / Z</span></div>
+    <div class="row">
+      <span class="k x">X</span>
+      <input id="posX" type="range" min="-1.8" max="1.8" step="0.01" value="0" aria-label="切面 X 位置">
+      <output id="posXVal">0.00</output>
+    </div>
+    <div class="row">
+      <span class="k y">Y</span>
+      <input id="posY" type="range" min="-2.6" max="2.6" step="0.01" value="1.8" aria-label="切面 Y 位置">
+      <output id="posYVal">1.80</output>
+    </div>
+    <div class="row">
+      <span class="k z">Z</span>
+      <input id="posZ" type="range" min="-1.8" max="1.8" step="0.01" value="0" aria-label="切面 Z 位置">
+      <output id="posZVal">0.00</output>
+    </div>
+  </div>
+
+  <div class="presets" id="presets" aria-label="预设截面"></div>
+
+  <p class="touch-tip">拖动 <b>X</b> / <b>Y</b> / <b>Z</b> 箭头或滑杆平移切面 · 拖动空白旋转 · 双指缩放</p>
+</aside>
+
+<footer class="hintbar">
+  <span class="item"><i>箭头 / 滑杆</i>沿 X / Y / Z 平移切面</span>
+  <span class="item"><i>拖动空白</i>旋转视角</span>
+  <span class="item"><i>滚轮 / 双指</i>缩放</span>
+  <span class="item"><i>双击</i>复位视角</span>
+  <span class="item tip">切面内平移 <em>不改变截线</em>，沿法线移动才会改变</span>
+</footer>
+
+<noscript>
+  <div style="position:fixed;inset:0;display:grid;place-items:center;color:#cfdff5;background:#05070e;font-size:15px">
+    请启用 JavaScript 以查看三维圆锥截面演示。
+  </div>
+</noscript>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============================================================
+     常量
+     ============================================================ */
+  var TAU = Math.PI * 2;
+  var DEG = Math.PI / 180;
+
+  var CONE_H = 3.2;                 // 单侧圆锥高度
+  var CONE_R = 2.0;                 // 底面半径
+  var TAN_A = CONE_R / CONE_H;      // tan(半顶角)
+  var ALPHA = Math.atan(TAN_A);     // 半顶角 ≈ 32.005°
+  var SIN_A = Math.sin(ALPHA);
+  var COS_A = Math.cos(ALPHA);
+  var PLANE_S = 3.3;                // 切面正方形半边长
+  var MAX_D = 2.6;                  // 切面到顶点距离上限
+  var FOV = 46 * DEG;
+  var CURVE_SAMPLES = 1600;
+
+  /* ============================================================
+     小工具
+     ============================================================ */
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function V(x, y, z) { return { x: x, y: y, z: z }; }
+  function add(a, b) { return V(a.x + b.x, a.y + b.y, a.z + b.z); }
+  function sub(a, b) { return V(a.x - b.x, a.y - b.y, a.z - b.z); }
+  function mul(a, s) { return V(a.x * s, a.y * s, a.z * s); }
+  function dot(a, b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+  function cross(a, b) {
+    return V(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+  }
+  function vlen(a) { return Math.hypot(a.x, a.y, a.z); }
+  function norm(a) { var l = vlen(a) || 1; return V(a.x / l, a.y / l, a.z / l); }
+  function hexA(hex, a) {
+    var n = parseInt(hex.slice(1), 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function $(id) { return document.getElementById(id); }
+
+  /* ============================================================
+     DOM
+     ============================================================ */
+  var canvas = $('stage');
+  var ctx = canvas.getContext('2d');
+  var root = document.documentElement;
+  var typeNameEl = $('typeName');
+  var typeEnEl = $('typeEn');
+  var badgeEl = $('badge');
+  var whyEl = $('why');
+  var psiEl = $('psiVal');
+  var meterMark = $('meterMark');
+  var meterFill = $('meterFill');
+  var meterTh = $('meterTh');
+  var tiltEl = $('tilt');
+  var tiltVal = $('tiltVal');
+  var offsetEl = $('offset');
+  var offsetVal = $('offsetVal');
+  var presetsEl = $('presets');
+
+  // 左侧截面视图
+  var scCanvas = $('sectionView');
+  var scCtx = scCanvas.getContext('2d');
+  var scTypeEl = $('scType');
+  var scGridEl = $('scGrid');
+  // X / Y / Z 位置滑杆
+  var posXEl = $('posX'), posYEl = $('posY'), posZEl = $('posZ');
+  var posXVal = $('posXVal'), posYVal = $('posYVal'), posZVal = $('posZVal');
+
+  /* ============================================================
+     状态
+     ============================================================ */
+  var st = {
+    theta: 0,                                  // 切面倾角（弧度，0 = 水平）
+    C: V(0, 1.8, 0),                           // 切面正方形中心（切面上一点）
+    cam: { yaw: 0.68, pitch: 0.31, dist: 13.2 },
+    hover: -1,
+    dragging: -1
+  };
+
+  var W = 0, H = 0, DPR = 1;
+  var view = { cx: 0, cy: 0 };
+  var dirty = true;
+  var anim = null;
+  var lastType = '';
+
+  var AXES = [
+    { dir: V(1, 0, 0), color: '#ff5f7e', label: 'X' },
+    { dir: V(0, 1, 0), color: '#7bf1a8', label: 'Y' },
+    { dir: V(0, 0, 1), color: '#5b8cff', label: 'Z' }
+  ];
+  var GIZMO_LEN = 2.0;
+
+  var TYPES = {
+    circle:    { zh: '圆',            en: 'Circle',       color: '#5eead4' },
+    ellipse:   { zh: '椭圆',          en: 'Ellipse',      color: '#7dd3fc' },
+    parabola:  { zh: '抛物线',        en: 'Parabola',     color: '#fbbf24' },
+    hyperbola: { zh: '双曲线',        en: 'Hyperbola',    color: '#fb7185' },
+    point:     { zh: '一个点',        en: 'Point',        color: '#c4b5fd' },
+    line:      { zh: '一条直线',      en: 'Line',         color: '#a3e635' },
+    twolines:  { zh: '两条相交直线',  en: 'Two lines',    color: '#c4b5fd' }
+  };
+
+  var ICONS = {
+    circle:    '<circle cx="20" cy="20" r="12"/>',
+    ellipse:   '<ellipse cx="20" cy="20" rx="14.5" ry="8"/>',
+    parabola:  '<path d="M5.5 12.5 Q20 40.5 34.5 12.5"/>',
+    hyperbola: '<path d="M13 4 C3 12 3 28 13 36"/><path d="M27 4 C37 12 37 28 27 36"/>',
+    point:     '<circle cx="20" cy="20" r="3.4" fill="currentColor" stroke="none"/>',
+    line:      '<path d="M6.5 33.5 33.5 6.5"/>',
+    twolines:  '<path d="M7 7 33 33"/><path d="M33 7 7 33"/>'
+  };
+
+  var PRESETS = [
+    { key: 'circle',    label: '圆',       theta: 0,  C: V(0, 1.8, 0) },
+    { key: 'ellipse',   label: '椭圆',     theta: 38, C: V(0, 1.8, 0) },
+    { key: 'parabola',  label: '抛物线',   theta: 58, C: V(0, 1.2, 0) },
+    { key: 'hyperbola', label: '双曲线',   theta: 84, C: V(0.95, 0, 0) },
+    { key: 'point',     label: '点',       theta: 0,  C: V(0, 0, 0) },
+    { key: 'line',      label: '一条直线', theta: 58, C: V(0, 0, 0) },
+    { key: 'twolines',  label: '两直线',   theta: 70, C: V(0, 0, 0) }
+  ];
+
+  /* ============================================================
+     切面几何
+     ============================================================ */
+  function normal() {
+    return V(Math.sin(st.theta), Math.cos(st.theta), 0);
+  }
+  function planeFrame() {
+    var th = st.theta;
+    var n = V(Math.sin(th), Math.cos(th), 0);
+    var u = V(Math.cos(th), -Math.sin(th), 0);   // 平面内基向量 1
+    var v = V(0, 0, 1);                          // 平面内基向量 2
+    return { n: n, u: u, v: v, d: dot(n, st.C) };
+  }
+
+  function clampC(c) {
+    c.x = clamp(c.x, -1.8, 1.8);
+    c.z = clamp(c.z, -1.8, 1.8);
+    c.y = clamp(c.y, -2.6, 2.6);
+    var n = normal();
+    var d = dot(n, c);
+    if (d > MAX_D) c = add(c, mul(n, MAX_D - d));
+    else if (d < -MAX_D) c = add(c, mul(n, -MAX_D - d));
+    return c;
+  }
+
+  /* ============================================================
+     分类：根据切面与轴线的夹角 ψ 和半顶角 α 的关系
+     ============================================================ */
+  function classify() {
+    var psi = Math.PI / 2 - st.theta;
+    var d = dot(normal(), st.C);
+    var angTol = 0.7 * DEG;
+    var dTol = 0.02;
+
+    if (Math.abs(d) < dTol) {                        // 经过顶点 → 退化
+      if (Math.abs(psi - ALPHA) < angTol) return 'line';
+      if (psi > ALPHA) return 'point';
+      return 'twolines';
+    }
+    if (psi > Math.PI / 2 - angTol) return 'circle';
+    if (Math.abs(psi - ALPHA) < angTol) return 'parabola';
+    if (psi > ALPHA) return 'ellipse';
+    return 'hyperbola';
+  }
+
+  /* 退化情形：切面过顶点时，截线是母线（直线） */
+  function degenerateLines() {
+    var n = normal();
+    var A = n.x * SIN_A, B = n.z * SIN_A, Cc = n.y * COS_A;
+    var R = Math.hypot(A, B);
+    if (R < 1e-9) return [];
+    var val = -Cc / R;
+    if (Math.abs(val) > 1.0000001) return [];
+    var base = Math.atan2(B, A);
+    var ac = Math.acos(clamp(val, -1, 1));
+    var phis = (Math.abs(val) > 0.9999995) ? [base] : [base - ac, base + ac];
+    var Lmax = CONE_H / COS_A;
+    return phis.map(function (phi) {
+      var dir = V(SIN_A * Math.cos(phi), COS_A, SIN_A * Math.sin(phi));
+      return { a: mul(dir, -Lmax), b: mul(dir, Lmax) };
+    });
+  }
+
+  /* 逐条母线（φ 参数）求交，得到截线折线 */
+  function computeCurve() {
+    var f = planeFrame();
+    var n = f.n, u = f.u, v = f.v, d = f.d, C = st.C;
+    var pts = new Array(CURVE_SAMPLES + 1);
+    var ok = new Array(CURVE_SAMPLES + 1);
+
+    for (var i = 0; i <= CURVE_SAMPLES; i++) {
+      var phi = i / CURVE_SAMPLES * TAU;
+      var dir = V(SIN_A * Math.cos(phi), COS_A, SIN_A * Math.sin(phi));
+      var den = dot(n, dir);
+      if (Math.abs(den) < 1e-7) { pts[i] = null; ok[i] = false; continue; }
+      var t = d / den;
+      var p = mul(dir, t);
+      if (!isFinite(p.x) || !isFinite(p.y) || !isFinite(p.z)) { pts[i] = null; ok[i] = false; continue; }
+      var rel = sub(p, C);
+      var du = dot(rel, u), dv = dot(rel, v);
+      pts[i] = p;
+      ok[i] = Math.abs(du) <= PLANE_S + 0.02 && Math.abs(dv) <= PLANE_S + 0.02 && vlen(p) < 60;
+    }
+
+    var segs = [], cur = [], prev = null;
+    for (var j = 0; j <= CURVE_SAMPLES; j++) {
+      var q = pts[j];
+      if (!q || !ok[j]) {
+        if (cur.length > 1) segs.push(cur);
+        cur = []; prev = null;
+        continue;
+      }
+      if (prev && vlen(sub(q, prev)) > 1.2) {
+        if (cur.length > 1) segs.push(cur);
+        cur = [];
+      }
+      cur.push(q);
+      prev = q;
+    }
+    if (cur.length > 1) segs.push(cur);
+    return segs;
+  }
+
+  var curveCache = null, curveSig = '';
+
+  function getCurve() {
+    var C = st.C;
+    var sig = st.theta.toFixed(6) + '|' + C.x.toFixed(6) + '|' + C.y.toFixed(6) + '|' + C.z.toFixed(6);
+    if (sig !== curveSig) {
+      curveSig = sig;
+      curveCache = computeCurve();
+    }
+    return curveCache;
+  }
+
+  /* ============================================================
+     相机 / 投影
+     ============================================================ */
+  function camera() {
+    var c = st.cam;
+    var cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    var target = V(0, 0, 0);
+    var pos = V(target.x + c.dist * cp * Math.cos(c.yaw),
+                target.y + c.dist * sp,
+                target.z + c.dist * cp * Math.sin(c.yaw));
+    var fwd = norm(sub(target, pos));
+    var right = norm(cross(fwd, V(0, 1, 0)));
+    var up = cross(right, fwd);
+    var focal = (H * 0.5) / Math.tan(FOV * 0.5);
+    return { pos: pos, fwd: fwd, right: right, up: up, focal: focal };
+  }
+
+  function project(p, cam) {
+    var dx = p.x - cam.pos.x, dy = p.y - cam.pos.y, dz = p.z - cam.pos.z;
+    var z = dx * cam.fwd.x + dy * cam.fwd.y + dz * cam.fwd.z;
+    if (z < 0.08) return null;
+    var sx = dx * cam.right.x + dy * cam.right.y + dz * cam.right.z;
+    var sy = dx * cam.up.x + dy * cam.up.y + dz * cam.up.z;
+    var k = cam.focal / z;
+    return { x: view.cx + sx * k, y: view.cy - sy * k, z: z };
+  }
+
+  /* ============================================================
+     静态网格
+     ============================================================ */
+  var coneQuads = (function () {
+    var arr = [];
+    var SEG = 36, RINGS = 16;
+    [1, -1].forEach(function (sgn) {
+      for (var j = 0; j < RINGS; j++) {
+        var y0 = sgn * CONE_H * j / RINGS;
+        var y1 = sgn * CONE_H * (j + 1) / RINGS;
+        var r0 = Math.abs(y0) * TAN_A;
+        var r1 = Math.abs(y1) * TAN_A;
+        for (var k = 0; k < SEG; k++) {
+          var a0 = k / SEG * TAU, a1 = (k + 1) / SEG * TAU;
+          arr.push([
+            V(r0 * Math.cos(a0), y0, r0 * Math.sin(a0)),
+            V(r0 * Math.cos(a1), y0, r0 * Math.sin(a1)),
+            V(r1 * Math.cos(a1), y1, r1 * Math.sin(a1)),
+            V(r1 * Math.cos(a0), y1, r1 * Math.sin(a0))
+          ]);
+        }
+      }
+    });
+    return arr;
+  })();
+
+  /* ============================================================
+     绘制
+     ============================================================ */
+  function draw() {
+    var cam = camera();
+    ctx.clearRect(0, 0, W, H);
+    drawAtmosphere(cam);
+    drawAxes(cam);
+
+    var items = [];
+    addCone(items, cam);
+    addPlane(items, cam);
+    items.sort(function (a, b) { return b.z - a.z; });
+
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], p = it.p;
+      ctx.beginPath();
+      ctx.moveTo(p[0].x, p[0].y);
+      ctx.lineTo(p[1].x, p[1].y);
+      ctx.lineTo(p[2].x, p[2].y);
+      ctx.lineTo(p[3].x, p[3].y);
+      ctx.closePath();
+      if (it.k === 0) {
+        ctx.fillStyle = 'rgba(84,198,240,.043)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(122,216,255,.075)';
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = 'rgba(245,185,66,.055)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(245,185,66,.115)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
+    }
+
+    drawRims(cam);
+    drawPlaneBorder(cam);
+    drawCurve(cam);
+    drawGizmo(cam);
+    drawSectionView();
+  }
+
+  function drawAtmosphere(cam) {
+    var o = project(V(0, 0, 0), cam);
+    if (!o) return;
+    var r = Math.min(W, H) * 0.62;
+    var g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, r);
+    g.addColorStop(0, 'rgba(64,148,255,.105)');
+    g.addColorStop(0.45, 'rgba(70,120,255,.04)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawAxes(cam) {
+    var L = 4.7;
+    var o = project(V(0, 0, 0), cam);
+    if (!o) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (var i = 0; i < 3; i++) {
+      var ax = AXES[i];
+      var pos = project(mul(ax.dir, L), cam);
+      var neg = project(mul(ax.dir, -L), cam);
+      if (!pos || !neg) continue;
+
+      ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(neg.x, neg.y);
+      ctx.strokeStyle = hexA(ax.color, 0.20);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(pos.x, pos.y);
+      ctx.strokeStyle = hexA(ax.color, 0.50);
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+
+      var dx = pos.x - o.x, dy = pos.y - o.y;
+      var l = Math.hypot(dx, dy) || 1;
+      var lx = pos.x + dx / l * 17, ly = pos.y + dy / l * 17;
+      ctx.fillStyle = hexA(ax.color, 0.92);
+      ctx.font = '700 12px "Inter","Segoe UI",system-ui,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(ax.label, lx, ly);
+    }
+    ctx.restore();
+  }
+
+  function addCone(items, cam) {
+    for (var i = 0; i < coneQuads.length; i++) {
+      var q = coneQuads[i];
+      var p0 = project(q[0], cam); if (!p0) continue;
+      var p1 = project(q[1], cam); if (!p1) continue;
+      var p2 = project(q[2], cam); if (!p2) continue;
+      var p3 = project(q[3], cam); if (!p3) continue;
+      items.push({ z: (p0.z + p1.z + p2.z + p3.z) * 0.25, k: 0, p: [p0, p1, p2, p3] });
+    }
+  }
+
+  function addPlane(items, cam) {
+    var f = planeFrame();
+    var u = f.u, v = f.v, C = st.C;
+    var N = 7, S = PLANE_S, step = (S * 2) / N;
+    var grid = [];
+    for (var i = 0; i <= N; i++) {
+      grid[i] = [];
+      for (var j = 0; j <= N; j++) {
+        var w = add(C, add(mul(u, -S + i * step), mul(v, -S + j * step)));
+        grid[i][j] = project(w, cam);
+      }
+    }
+    for (var a = 0; a < N; a++) {
+      for (var b = 0; b < N; b++) {
+        var q0 = grid[a][b], q1 = grid[a + 1][b], q2 = grid[a + 1][b + 1], q3 = grid[a][b + 1];
+        if (!q0 || !q1 || !q2 || !q3) continue;
+        items.push({ z: (q0.z + q1.z + q2.z + q3.z) * 0.25, k: 1, p: [q0, q1, q2, q3] });
+      }
+    }
+  }
+
+  function drawPlaneBorder(cam) {
+    var f = planeFrame();
+    var u = f.u, v = f.v, C = st.C, S = PLANE_S;
+    var corners = [
+      add(C, add(mul(u, -S), mul(v, -S))),
+      add(C, add(mul(u, S), mul(v, -S))),
+      add(C, add(mul(u, S), mul(v, S))),
+      add(C, add(mul(u, -S), mul(v, S)))
+    ].map(function (p) { return project(p, cam); });
+    if (corners.some(function (p) { return !p; })) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    for (var i = 1; i < 4; i++) ctx.lineTo(corners[i].x, corners[i].y);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(245,185,66,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // 四角小刻度
+    ctx.strokeStyle = 'rgba(245,185,66,.75)';
+    ctx.lineWidth = 1.6;
+    for (var k = 0; k < 4; k++) {
+      var p = corners[k], q = corners[(k + 1) % 4];
+      var dx = q.x - p.x, dy = q.y - p.y, l = Math.hypot(dx, dy) || 1;
+      var ux = dx / l, uy = dy / l;
+      ctx.beginPath();
+      ctx.moveTo(p.x + ux * 1.5, p.y + uy * 1.5);
+      ctx.lineTo(p.x + ux * 15, p.y + uy * 15);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawRims(cam) {
+    ctx.save();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(130,220,255,.34)';
+    [1, -1].forEach(function (sgn) {
+      var y = sgn * CONE_H, r = CONE_R;
+      ctx.beginPath();
+      var started = false;
+      for (var i = 0; i <= 72; i++) {
+        var a = i / 72 * TAU;
+        var p = project(V(r * Math.cos(a), y, r * Math.sin(a)), cam);
+        if (!p) { started = false; continue; }
+        if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    });
+    // 锥顶
+    var o = project(V(0, 0, 0), cam);
+    if (o) {
+      var g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 16);
+      g.addColorStop(0, 'rgba(170,235,255,.85)');
+      g.addColorStop(0.4, 'rgba(110,200,255,.28)');
+      g.addColorStop(1, 'rgba(110,200,255,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 16, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(205,242,255,.95)';
+      ctx.beginPath(); ctx.arc(o.x, o.y, 2.6, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function strokeScreenSegments(segs, width, style) {
+    ctx.lineWidth = width;
+    ctx.strokeStyle = style;
+    for (var i = 0; i < segs.length; i++) {
+      var pts = segs[i];
+      if (pts.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
+      ctx.stroke();
+    }
+  }
+
+  function drawCurve(cam) {
+    var type = classify();
+    var color = TYPES[type].color;
+
+    if (type === 'point') {
+      var o = project(V(0, 0, 0), cam);
+      if (!o) return;
+      var g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 28);
+      g.addColorStop(0, hexA(color, 0.95));
+      g.addColorStop(0.32, hexA(color, 0.42));
+      g.addColorStop(1, hexA(color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 28, 0, TAU); ctx.fill();
+      ctx.strokeStyle = hexA(color, 0.75);
+      ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 12, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = hexA(color, 0.30);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 22, 0, TAU); ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(o.x, o.y, 3.2, 0, TAU); ctx.fill();
+      return;
+    }
+
+    if (type === 'line' || type === 'twolines') {
+      var lines = degenerateLines();
+      var screen = [];
+      for (var i = 0; i < lines.length; i++) {
+        var a = project(lines[i].a, cam), b = project(lines[i].b, cam);
+        if (a && b) screen.push([a, b]);
+      }
+      if (!screen.length) return;
+      ctx.save();
+      ctx.lineCap = 'round';
+      strokeScreenSegments(screen, 12, hexA(color, 0.10));
+      strokeScreenSegments(screen, 6, hexA(color, 0.24));
+      strokeScreenSegments(screen, 2.6, hexA(color, 0.95));
+      ctx.restore();
+      return;
+    }
+
+    var segs = getCurve();
+    if (!segs.length) return;
+    var proj = [];
+    for (var s = 0; s < segs.length; s++) {
+      var src = segs[s], out = [];
+      for (var k = 0; k < src.length; k++) {
+        var p = project(src[k], cam);
+        if (p) out.push(p);
+      }
+      if (out.length > 1) proj.push(out);
+    }
+    if (!proj.length) return;
+
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    strokeScreenSegments(proj, 13, hexA(color, 0.075));
+    strokeScreenSegments(proj, 6.5, hexA(color, 0.18));
+    strokeScreenSegments(proj, 2.7, hexA(color, 0.96));
+    strokeScreenSegments(proj, 1.1, 'rgba(255,255,255,.55)');
+    ctx.restore();
+  }
+
+  function drawGizmo(cam) {
+    var c = project(st.C, cam);
+    if (!c) return;
+    var activeMode = st.dragging >= 0 ? st.dragging : st.hover;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (var i = 0; i < 3; i++) {
+      var ax = AXES[i];
+      var tip = project(add(st.C, mul(ax.dir, GIZMO_LEN)), cam);
+      if (!tip) continue;
+      var active = (activeMode === i);
+      var dx = tip.x - c.x, dy = tip.y - c.y;
+      var l = Math.hypot(dx, dy) || 1;
+      var ux = dx / l, uy = dy / l;
+
+      var shaftEndX = tip.x - ux * 9;
+      var shaftEndY = tip.y - uy * 9;
+
+      if (active) {
+        ctx.strokeStyle = hexA(ax.color, 0.28);
+        ctx.lineWidth = 10;
+        ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(shaftEndX, shaftEndY); ctx.stroke();
+      }
+      ctx.strokeStyle = hexA(ax.color, active ? 1 : 0.82);
+      ctx.lineWidth = active ? 3.6 : 2.6;
+      ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(shaftEndX, shaftEndY); ctx.stroke();
+
+      // 箭头
+      var hw = active ? 6.6 : 5.2, hl = active ? 15 : 12.5;
+      var bx = tip.x - ux * hl, by = tip.y - uy * hl;
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(bx - uy * hw, by + ux * hw);
+      ctx.lineTo(bx + uy * hw, by - ux * hw);
+      ctx.closePath();
+      ctx.fillStyle = hexA(ax.color, active ? 1 : 0.9);
+      ctx.fill();
+
+      // 标签
+      ctx.font = '700 11.5px "Inter","Segoe UI",system-ui,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = hexA(ax.color, active ? 1 : 0.85);
+      ctx.fillText(ax.label, tip.x + ux * 15, tip.y + uy * 15);
+    }
+
+    // 中心手柄
+    var g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 20);
+    g.addColorStop(0, 'rgba(255,255,255,.30)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(c.x, c.y, 20, 0, TAU); ctx.fill();
+
+    ctx.fillStyle = '#0a1322';
+    ctx.strokeStyle = 'rgba(220,238,255,.95)';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.arc(c.x, c.y, 5.2, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ============================================================
+     左侧：切面内真实形状
+     ============================================================ */
+  var scW = 0, scH = 0, scDpr = 1;
+
+  function resizeSectionView() {
+    var r = scCanvas.getBoundingClientRect();
+    var w = Math.max(1, Math.round(r.width));
+    var h = Math.max(1, Math.round(r.height));
+    if (w === scW && h === scH && scDpr === DPR) return;
+    scW = w; scH = h; scDpr = DPR;
+    scCanvas.width = Math.round(w * scDpr);
+    scCanvas.height = Math.round(h * scDpr);
+  }
+
+  function drawSectionView() {
+    resizeSectionView();
+    var w = scW, h = scH;
+    if (!w || !h) return;
+    var g = scCtx;
+    g.setTransform(scDpr, 0, 0, scDpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+
+    var type = classify();
+    var color = TYPES[type].color;
+    var f = planeFrame();
+    var u = f.u, v = f.v;
+
+    function to2(p) {
+      return {
+        x: p.x * u.x + p.y * u.y + p.z * u.z,
+        y: p.x * v.x + p.y * v.y + p.z * v.z
+      };
+    }
+
+    var polys = [];
+    var isPoint = (type === 'point');
+    if (!isPoint) {
+      if (type === 'line' || type === 'twolines') {
+        var lines = degenerateLines();
+        for (var li = 0; li < lines.length; li++) {
+          polys.push([to2(lines[li].a), to2(lines[li].b)]);
+        }
+      } else {
+        var segs = getCurve();
+        for (var si = 0; si < segs.length; si++) polys.push(segs[si].map(to2));
+      }
+    }
+
+    // 视野 = 截线 ∪ {圆锥轴线与切面的交点}，该点在切面坐标中即原点
+    var minX = 0, maxX = 0, minY = 0, maxY = 0;
+    for (var i = 0; i < polys.length; i++) {
+      for (var j = 0; j < polys[i].length; j++) {
+        var q = polys[i][j];
+        if (q.x < minX) minX = q.x;
+        if (q.x > maxX) maxX = q.x;
+        if (q.y < minY) minY = q.y;
+        if (q.y > maxY) maxY = q.y;
+      }
+    }
+    var bw = maxX - minX, bh = maxY - minY;
+    if (bw < 1e-4) { bw = 1; minX = -0.5; maxX = 0.5; }
+    if (bh < 1e-4) { bh = 1; minY = -0.5; maxY = 0.5; }
+    var padPx = 15;
+    var scale = Math.min((w - padPx * 2) / bw, (h - padPx * 2) / bh, 90);
+    if (!isFinite(scale) || scale <= 0) scale = 20;
+    var cx = (minX + maxX) * 0.5, cy = (minY + maxY) * 0.5;
+    var TX = function (x) { return w * 0.5 + (x - cx) * scale; };
+    var TY = function (y) { return h * 0.5 - (y - cy) * scale; };
+
+    var steps = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
+    var step = steps[steps.length - 1];
+    for (var k0 = 0; k0 < steps.length; k0++) {
+      if (steps[k0] * scale >= 24) { step = steps[k0]; break; }
+    }
+    var x0 = cx - (w * 0.5) / scale, x1 = cx + (w * 0.5) / scale;
+    var y0 = cy - (h * 0.5) / scale, y1 = cy + (h * 0.5) / scale;
+
+    g.lineWidth = 1;
+    g.strokeStyle = 'rgba(140,175,220,.09)';
+    g.beginPath();
+    for (var gx = Math.ceil(x0 / step); gx * step <= x1; gx++) {
+      var px = TX(gx * step);
+      g.moveTo(px, 0); g.lineTo(px, h);
+    }
+    for (var gy = Math.ceil(y0 / step); gy * step <= y1; gy++) {
+      var py = TY(gy * step);
+      g.moveTo(0, py); g.lineTo(w, py);
+    }
+    g.stroke();
+
+    var ox = TX(0), oy = TY(0);
+    g.strokeStyle = 'rgba(150,190,235,.18)';
+    g.beginPath();
+    g.moveTo(0, oy); g.lineTo(w, oy);
+    g.moveTo(ox, 0); g.lineTo(ox, h);
+    g.stroke();
+
+    if (isPoint) {
+      var gg = g.createRadialGradient(ox, oy, 0, ox, oy, 22);
+      gg.addColorStop(0, hexA(color, .95));
+      gg.addColorStop(0.3, hexA(color, .45));
+      gg.addColorStop(1, hexA(color, 0));
+      g.fillStyle = gg;
+      g.beginPath(); g.arc(ox, oy, 22, 0, TAU); g.fill();
+      g.strokeStyle = hexA(color, .72); g.lineWidth = 1.4;
+      g.beginPath(); g.arc(ox, oy, 9, 0, TAU); g.stroke();
+      g.fillStyle = '#ffffff';
+      g.beginPath(); g.arc(ox, oy, 2.6, 0, TAU); g.fill();
+    } else {
+      if (ox > -12 && ox < w + 12 && oy > -12 && oy < h + 12) {
+        g.strokeStyle = 'rgba(190,214,245,.38)';
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(ox - 4, oy); g.lineTo(ox + 4, oy);
+        g.moveTo(ox, oy - 4); g.lineTo(ox, oy + 4);
+        g.stroke();
+      }
+      g.lineJoin = 'round';
+      g.lineCap = 'round';
+      var passes = [[7, 0.10], [3.6, 0.20], [1.6, 0.96]];
+      for (var pi = 0; pi < passes.length; pi++) {
+        g.lineWidth = passes[pi][0];
+        g.strokeStyle = hexA(color, passes[pi][1]);
+        g.beginPath();
+        for (var pj = 0; pj < polys.length; pj++) {
+          var pts = polys[pj];
+          if (pts.length < 2) continue;
+          g.moveTo(TX(pts[0].x), TY(pts[0].y));
+          for (var pk = 1; pk < pts.length; pk++) g.lineTo(TX(pts[pk].x), TY(pts[pk].y));
+        }
+        g.stroke();
+      }
+      g.lineWidth = 0.7;
+      g.strokeStyle = 'rgba(255,255,255,.50)';
+      g.beginPath();
+      for (var qi = 0; qi < polys.length; qi++) {
+        var qs = polys[qi];
+        if (qs.length < 2) continue;
+        g.moveTo(TX(qs[0].x), TY(qs[0].y));
+        for (var qk = 1; qk < qs.length; qk++) g.lineTo(TX(qs[qk].x), TY(qs[qk].y));
+      }
+      g.stroke();
+    }
+
+    if (scGridEl) scGridEl.textContent = '1 格 = ' + step + ' 单位';
+  }
+
+  /* ============================================================
+     UI 同步
+     ============================================================ */
+  function whyText(type, psi) {
+    var a = (ALPHA / DEG).toFixed(1);
+    switch (type) {
+      case 'circle':
+        return '<b>ψ = 90°</b>：切面垂直于圆锥的轴线，截线是一个<b>圆</b>。';
+      case 'ellipse':
+        return '<b>ψ = ' + psi.toFixed(1) + '°</b> 大于半顶角 <b>α = ' + a + '°</b>，切面比母线更「平缓」，截线是一个封闭的<b>椭圆</b>。';
+      case 'parabola':
+        return '<b>ψ ≈ α = ' + a + '°</b>：切面平行于圆锥的一条母线，截线是一条开口的<b>抛物线</b>。';
+      case 'hyperbola':
+        return '<b>ψ = ' + psi.toFixed(1) + '°</b> 小于半顶角 <b>α = ' + a + '°</b>，切面同时穿过上下两个锥面，截线是<b>双曲线</b>的两支。';
+      case 'point':
+        return '切面经过<b>顶点</b>，并且比母线更「陡」，只与锥面交于顶点——退化为<b>一个点</b>。';
+      case 'line':
+        return '切面经过<b>顶点</b>，并且正好平行于一条母线——退化为<b>一条直线</b>。';
+      case 'twolines':
+        return '切面经过<b>顶点</b>，与锥面相交于两条母线——退化为<b>两条相交直线</b>。';
+    }
+    return '';
+  }
+
+  function setBadge(type) {
+    var info = TYPES[type];
+    badgeEl.innerHTML = '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" ' +
+      'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+      ICONS[type] + '</svg>';
+    root.style.setProperty('--accent', info.color);
+    root.style.setProperty('--accent-dim', hexA(info.color, 0.45));
+  }
+
+  function updatePresetActive() {
+    for (var i = 0; i < PRESETS.length; i++) {
+      var p = PRESETS[i];
+      var dt = Math.abs(st.theta - p.theta * DEG);
+      var dc = Math.abs(st.C.x - p.C.x) + Math.abs(st.C.y - p.C.y) + Math.abs(st.C.z - p.C.z);
+      var on = dt < 0.003 && dc < 0.03;
+      var btn = presetsEl.children[i];
+      if (btn) btn.setAttribute('data-active', on ? '1' : '0');
+    }
+  }
+
+  function syncUI() {
+    var type = classify();
+    var info = TYPES[type];
+    if (type !== lastType) {
+      lastType = type;
+      typeNameEl.textContent = info.zh;
+      typeEnEl.textContent = info.en;
+      if (scTypeEl) scTypeEl.textContent = info.zh;
+      setBadge(type);
+      if (typeNameEl.animate && !prefersReduced) {
+        typeNameEl.animate(
+          [{ opacity: 0.25, transform: 'translateY(7px)' }, { opacity: 1, transform: 'none' }],
+          { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' }
+        );
+      }
+    }
+
+    var d = dot(normal(), st.C);
+    var psi = 90 - st.theta / DEG;
+    psiEl.textContent = psi.toFixed(1) + '°';
+
+    var pct = clamp(psi, 0, 90) / 90 * 100;
+    meterMark.style.left = pct.toFixed(2) + '%';
+    meterFill.style.width = pct.toFixed(2) + '%';
+    meterTh.style.left = (ALPHA / DEG / 90 * 100).toFixed(2) + '%';
+
+    whyEl.innerHTML = whyText(type, psi);
+
+    tiltEl.value = String(Math.round(st.theta / DEG * 2) / 2);
+    tiltVal.textContent = (st.theta / DEG).toFixed(1) + '°';
+    offsetEl.value = String(Math.round(d * 100) / 100);
+    offsetVal.textContent = d.toFixed(2) + (Math.abs(d) < 0.02 ? ' · 过顶点' : '');
+
+    posXEl.value = st.C.x.toFixed(2);
+    posYEl.value = st.C.y.toFixed(2);
+    posZEl.value = st.C.z.toFixed(2);
+    posXVal.textContent = st.C.x.toFixed(2);
+    posYVal.textContent = st.C.y.toFixed(2);
+    posZVal.textContent = st.C.z.toFixed(2);
+
+    updatePresetActive();
+  }
+
+  /* ============================================================
+     尺寸
+     ============================================================ */
+  var wasNarrow = null;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth || window.innerWidth;
+    H = canvas.clientHeight || window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    var narrow = W < 900;
+    view.cx = narrow ? W * 0.5 + 38 : W * 0.5 - 90;
+    view.cy = narrow ? H * 0.26 : H * 0.5 + 22;
+
+    if (wasNarrow === null) {
+      st.cam.dist = narrow ? 25 : 13.2;
+    } else if (wasNarrow !== narrow) {
+      st.cam.dist = narrow ? 25 : 13.2;
+    }
+    wasNarrow = narrow;
+    dirty = true;
+  }
+
+  /* ============================================================
+     交互
+     ============================================================ */
+  var pointers = new Map();
+  var drag = null;
+  var pinchPrev = null;
+
+  function pointerPos(e) {
+    var r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function distToSegment(px, py, x1, y1, x2, y2) {
+    var dx = x2 - x1, dy = y2 - y1;
+    var l2 = dx * dx + dy * dy;
+    var t = l2 ? ((px - x1) * dx + (py - y1) * dy) / l2 : 0;
+    t = clamp(t, 0, 1);
+    var qx = x1 + dx * t, qy = y1 + dy * t;
+    return Math.hypot(px - qx, py - qy);
+  }
+
+  function hitGizmo(x, y) {
+    var cam = camera();
+    var c = project(st.C, cam);
+    if (!c) return -1;
+    // 圆心手柄：先记录，真正拖动时按移动方向自动选择轴
+    if (Math.hypot(x - c.x, y - c.y) < 9) return -2;
+    var best = -1, bestD = 18;
+    for (var i = 0; i < 3; i++) {
+      var tip = project(add(st.C, mul(AXES[i].dir, GIZMO_LEN)), cam);
+      if (!tip) continue;
+      var d = distToSegment(x, y, c.x, c.y, tip.x, tip.y);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  function onDown(e) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    var p = pointerPos(e);
+    pointers.set(e.pointerId, p);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+
+    if (pointers.size >= 2) {
+      drag = null;
+      st.dragging = -1;
+      pinchPrev = null;
+      dirty = true;
+      return;
+    }
+
+    var hit = hitGizmo(p.x, p.y);
+    if (hit === -2) {
+      drag = { mode: 'center', x: p.x, y: p.y, C0: V(st.C.x, st.C.y, st.C.z), pointerId: e.pointerId };
+      canvas.classList.add('grabbing');
+    } else if (hit >= 0) {
+      st.dragging = hit;
+      drag = { mode: 'axis', axis: hit, C0: V(st.C.x, st.C.y, st.C.z), pointerId: e.pointerId };
+      canvas.classList.add('grabbing');
+    } else {
+      drag = { mode: 'orbit', x: p.x, y: p.y, yaw: st.cam.yaw, pitch: st.cam.pitch, pointerId: e.pointerId };
+      canvas.classList.add('grabbing');
+    }
+    dirty = true;
+  }
+
+  function onMove(e) {
+    var p = pointerPos(e);
+
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, p);
+    }
+
+    if (pointers.size >= 2) {
+      var arr = Array.from(pointers.values());
+      var dNow = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+      if (pinchPrev) {
+        st.cam.dist = clamp(st.cam.dist * (pinchPrev / Math.max(dNow, 1)), 6, 26);
+        dirty = true;
+      }
+      pinchPrev = dNow;
+      return;
+    }
+
+    if (!drag) {
+      if (e.target !== canvas) return;
+      var h = hitGizmo(p.x, p.y);
+      if (h !== st.hover) { st.hover = h; dirty = true; }
+      canvas.style.cursor = h >= 0 ? 'pointer' : 'grab';
+      return;
+    }
+
+    if (drag.mode === 'orbit') {
+      st.cam.yaw = drag.yaw + (p.x - drag.x) * 0.0064;
+      st.cam.pitch = clamp(drag.pitch - (p.y - drag.y) * 0.0056, -1.35, 1.35);
+      dirty = true;
+      return;
+    }
+
+    // 中心手柄：按拖动方向选择作用轴
+    if (drag.mode === 'center') {
+      var mdx = p.x - drag.x, mdy = p.y - drag.y;
+      if (Math.hypot(mdx, mdy) < 5) return;
+      var cam2 = camera();
+      var base2 = project(drag.C0, cam2);
+      var pick = 0, pickScore = -1;
+      for (var ai = 0; ai < 3; ai++) {
+        var tp = project(add(drag.C0, AXES[ai].dir), cam2);
+        if (!tp || !base2) continue;
+        var ax2 = tp.x - base2.x, ay2 = tp.y - base2.y;
+        var al = Math.hypot(ax2, ay2) || 1;
+        var score = Math.abs((mdx * ax2 + mdy * ay2) / al);
+        if (score > pickScore) { pickScore = score; pick = ai; }
+      }
+      drag.mode = 'axis';
+      drag.axis = pick;
+      st.dragging = pick;
+      dirty = true;
+    }
+
+    // 沿坐标轴拖动切面
+    var cam = camera();
+    var base = project(drag.C0, cam);
+    var unit = project(add(drag.C0, AXES[drag.axis].dir), cam);
+    if (!base || !unit) return;
+    var vx = unit.x - base.x, vy = unit.y - base.y;
+    var den = vx * vx + vy * vy;
+    if (den < 4) return;
+    var s = ((p.x - base.x) * vx + (p.y - base.y) * vy) / den;
+
+    var target = add(drag.C0, mul(AXES[drag.axis].dir, clamp(s, -6, 6)));
+    st.C = clampC(target);
+    dirty = true;
+    syncUI();
+  }
+
+  function onUp(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchPrev = null;
+    if (drag && drag.pointerId === e.pointerId) {
+      drag = null;
+      st.dragging = -1;
+      canvas.classList.remove('grabbing');
+    }
+    if (pointers.size === 0) {
+      drag = null;
+      st.dragging = -1;
+      canvas.classList.remove('grabbing');
+    }
+    dirty = true;
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    st.cam.dist = clamp(st.cam.dist * Math.exp(e.deltaY * 0.0011), 6, 26);
+    dirty = true;
+  }
+
+  function resetCamera() {
+    st.cam.yaw = 0.68;
+    st.cam.pitch = 0.31;
+    st.cam.dist = wasNarrow ? 25 : 13.2;
+    dirty = true;
+  }
+
+  /* ============================================================
+     预设与动画
+     ============================================================ */
+  var prefersReduced = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function applyPreset(p) {
+    anim = {
+      t0: performance.now(),
+      dur: prefersReduced ? 1 : 480,
+      from: { theta: st.theta, C: V(st.C.x, st.C.y, st.C.z) },
+      to: { theta: p.theta * DEG, C: V(p.C.x, p.C.y, p.C.z) }
+    };
+  }
+
+  PRESETS.forEach(function (p) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset';
+    btn.textContent = p.label;
+    btn.title = '切换到「' + p.label + '」';
+    btn.addEventListener('click', function () { applyPreset(p); });
+    presetsEl.appendChild(btn);
+  });
+
+  tiltEl.addEventListener('input', function () {
+    anim = null;
+    st.theta = parseFloat(tiltEl.value) * DEG;
+    dirty = true;
+    syncUI();
+  });
+
+  offsetEl.addEventListener('input', function () {
+    anim = null;
+    var n = normal();
+    var dNow = dot(n, st.C);
+    var target = parseFloat(offsetEl.value);
+    st.C = clampC(add(st.C, mul(n, target - dNow)));
+    dirty = true;
+    syncUI();
+  });
+
+  // X / Y / Z 位置滑杆
+  function bindPositionSlider(el, key) {
+    el.addEventListener('input', function () {
+      anim = null;
+      var c = V(st.C.x, st.C.y, st.C.z);
+      c[key] = parseFloat(el.value);
+      st.C = clampC(c);
+      dirty = true;
+      syncUI();
+    });
+  }
+  bindPositionSlider(posXEl, 'x');
+  bindPositionSlider(posYEl, 'y');
+  bindPositionSlider(posZEl, 'z');
+
+  canvas.addEventListener('pointerdown', onDown);
+  window.addEventListener('pointermove', onMove, { passive: true });
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('pointerleave', function () {
+    if (!drag && st.hover !== -1) { st.hover = -1; dirty = true; }
+  });
+  canvas.addEventListener('dblclick', resetCamera);
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  window.addEventListener('resize', resize);
+  if (window.ResizeObserver) {
+    new ResizeObserver(resize).observe(canvas.parentElement || document.body);
+  }
+
+  /* ============================================================
+     启动
+     ============================================================ */
+  function readURL() {
+    try {
+      var q = new URLSearchParams(location.search);
+      if (q.has('theta')) {
+        st.theta = clamp(parseFloat(q.get('theta')) || 0, 0, 89) * DEG;
+      }
+      if (q.has('preset')) {
+        var key = q.get('preset');
+        for (var i = 0; i < PRESETS.length; i++) {
+          if (PRESETS[i].key === key) {
+            st.theta = PRESETS[i].theta * DEG;
+            st.C = V(PRESETS[i].C.x, PRESETS[i].C.y, PRESETS[i].C.z);
+            break;
+          }
+        }
+      }
+      if (q.has('d')) {
+        var dd = clamp(parseFloat(q.get('d')) || 0, -MAX_D, MAX_D);
+        var n = normal();
+        var cur = dot(n, st.C);
+        st.C = clampC(add(st.C, mul(n, dd - cur)));
+      }
+    } catch (err) { /* ignore */ }
+  }
+
+  function loop(now) {
+    if (anim) {
+      var t = Math.min(1, (now - anim.t0) / anim.dur);
+      var e = 1 - Math.pow(1 - t, 3);
+      st.theta = lerp(anim.from.theta, anim.to.theta, e);
+      st.C.x = lerp(anim.from.C.x, anim.to.C.x, e);
+      st.C.y = lerp(anim.from.C.y, anim.to.C.y, e);
+      st.C.z = lerp(anim.from.C.z, anim.to.C.z, e);
+      if (t >= 1) anim = null;
+      dirty = true;
+      syncUI();
+    }
+    if (dirty) {
+      draw();
+      dirty = false;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  readURL();
+  resize();
+  syncUI();
+  requestAnimationFrame(loop);
+
+  // 双击复位、窗口尺寸变化时会重新投影，暴露少量调试信息
+  window.__conic = {
+    state: st,
+    classify: classify,
+    planeFrame: planeFrame,
+    camera: camera,
+    project: project,
+    view: view,
+    curve: getCurve,
+    normal: normal
+  };
+})();
+</script>
+</body>
+</html>
